@@ -4,6 +4,4 @@ services:
     runtime: python
     buildCommand: ""
     startCommand: python app.py
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.10
+    envVars: []

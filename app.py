@@ -1,47 +1,35 @@
-from flask import Flask, request, jsonify,render_template
+import gradio as gr
 from sentence_transformers import SentenceTransformer, util
 import PyPDF2
-from werkzeug.utils import secure_filename
-import os
 
-app = Flask(__name__)
-model = SentenceTransformer('paraphrase-MiniLM-L3-v2')  # Much smaller
+# Load smaller model for Hugging Face (less memory)
+model = SentenceTransformer('paraphrase-MiniLM-L3-v2')
 
-
-
-
-def extract_text_from_pdf(file):
-    pdf = PyPDF2.PdfReader(file)
-    text = ''
-    for page in pdf.pages:
-        text += page.extract_text() or ''
+def extract_text_from_pdf(pdf_file):
+    reader = PyPDF2.PdfReader(pdf_file)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() or ""
     return text
 
-@app.route('/', methods=['GET'])
-def index():
-    return render_template('index.html')
+def get_match_score(resume_pdf, job_description):
+    try:
+        resume_text = extract_text_from_pdf(resume_pdf)
+        embeddings = model.encode([resume_text, job_description], convert_to_tensor=True)
+        score = util.pytorch_cos_sim(embeddings[0], embeddings[1]).item()
+        return f"✅ Match Score: {round(score * 100, 2)}%"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
 
-@app.route('/api/match_score', methods=['POST'])
-def match_score():
-    if 'resume_file' not in request.files or 'job_description' not in request.form:
-        return jsonify({"error": "Missing resume_file or job_description"}), 400
+interface = gr.Interface(
+    fn=get_match_score,
+    inputs=[
+        gr.File(label="Upload Resume (PDF)", file_types=[".pdf"]),
+        gr.Textbox(lines=10, label="Paste Job Description")
+    ],
+    outputs="text",
+    title="🧠 ATS Resume Match Checker",
+    description="Upload your resume PDF and paste a job description to get an AI-powered semantic match score."
+)
 
-    resume_file = request.files['resume_file']
-    job_description = request.form['job_description']
-
-    if not resume_file.filename.lower().endswith('.pdf'):
-        return jsonify({"error": "Only PDF resumes allowed"}), 400
-
-    resume_text = extract_text_from_pdf(resume_file)
-
-    embeddings = model.encode([resume_text, job_description], convert_to_tensor=True)
-    score = util.pytorch_cos_sim(embeddings[0], embeddings[1]).item()
-    percent = round(score * 100, 2)
-
-    return jsonify({
-        "match_score": percent,
-        "status": "success"
-    })
-
-if __name__ == '__main__':
-    app.run(debug=True)
+interface.launch()

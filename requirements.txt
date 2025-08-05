@@ -1,4 +1,4 @@
-Flask
+gradio
 sentence-transformers
 torch
 PyPDF2
